@@ -14,8 +14,10 @@ package com.ds.avare;
 
 import com.ds.avare.R;
 import com.ds.avare.gps.GpsInterface;
+import com.ds.avare.storage.Preferences;
 import com.ds.avare.utils.Helper;
 import com.ds.avare.weather.ContentGenerator;
+import com.ds.avare.weather.WeatherMeister;
 
 import android.location.GpsStatus;
 import android.location.Location;
@@ -33,8 +35,10 @@ import android.view.View;
 import android.view.Window;
 import android.view.View.OnClickListener;
 import android.webkit.WebView;
+import android.webkit.WebViewClient;
 import android.widget.Button;
 import android.widget.EditText;
+import android.widget.ImageButton;
 import android.widget.ProgressBar;
 
 /**
@@ -49,10 +53,16 @@ public class WeatherActivity extends Activity {
     private EditText mSearchText;
     private Button mNextButton;
     private Button mLastButton;
+    private ImageButton mWxSrcButton;
     private ProgressBar mProgressBar;
     private WebAppInterface mInfc;
-
-
+    private String mWebQuery = "";
+    private Preferences mPref;
+    
+    static final int WX_SRC_DEFAULT = 0;
+    static final int WX_SRC_WEATHERMEISTER = 1;
+    static final int MAX_WX_SRC = 2;
+    
     /**
      * Service that keeps state even when activity is dead
      */
@@ -119,19 +129,20 @@ public class WeatherActivity extends Activity {
         requestWindowFeature(Window.FEATURE_NO_TITLE);
         mContext = this;
 
+        // Get the preferences for this context
+        mPref = new Preferences(mContext);
+        
         LayoutInflater layoutInflater = (LayoutInflater) getSystemService(Context.LAYOUT_INFLATER_SERVICE);
         View view = layoutInflater.inflate(R.layout.weather, null);
         setContentView(view);
+
         mWebView = (WebView)view.findViewById(R.id.weather_mainpage);
         mWebView.getSettings().setJavaScriptEnabled(true);
         mWebView.getSettings().setBuiltInZoomControls(true);
         mInfc = new WebAppInterface(mContext, mWebView);
         mWebView.addJavascriptInterface(mInfc, "Android");
-        if(mIsPageLoaded == false) {
-            mWebView.loadData(ContentGenerator.makeContentImage(mContext, mService), "text/html", null);
-        }
-        mIsPageLoaded = true;
-
+        loadContent();
+        
         /*
          * Progress bar
          */
@@ -173,7 +184,15 @@ public class WeatherActivity extends Activity {
 
             @Override
             public void onClick(View v) {
-                mWebView.findNext(true);
+            	switch(mPref.getWxSrc()) {
+	            	case WX_SRC_DEFAULT:
+	                    mWebView.findNext(true);
+	                    break;
+
+	            	case WX_SRC_WEATHERMEISTER:
+	                    mWebView.goForward();
+	                    break;
+            	}
             }
             
         });
@@ -183,7 +202,33 @@ public class WeatherActivity extends Activity {
 
             @Override
             public void onClick(View v) {
-                mWebView.findNext(false);
+            	switch(mPref.getWxSrc()) {
+	            	case WX_SRC_DEFAULT:
+	                    mWebView.findNext(false);
+	                    break;
+
+	            	case WX_SRC_WEATHERMEISTER:
+	                    mWebView.goBack();
+	                    break;
+            	}
+            }
+            
+        });
+
+        // Handle the weather source toggle button. 
+        // Save the state of the button in the preferences
+        mWxSrcButton = (ImageButton)view.findViewById(R.id.weather_source);
+        mWxSrcButton.setOnClickListener(new OnClickListener() {
+
+            @Override
+            public void onClick(View v) {
+            	int wxSrc = mPref.getWxSrc();
+				if(++wxSrc == MAX_WX_SRC) {
+					wxSrc = WX_SRC_DEFAULT;
+				}
+				mPref.setWxSrc(wxSrc);
+		        mIsPageLoaded = false;
+		        loadContent();
             }
             
         });
@@ -215,6 +260,8 @@ public class WeatherActivity extends Activity {
             mService = binder.getService();
             mService.registerGpsListener(mGpsInfc);
             mInfc.connect(mService);
+
+            loadContent(); // Service just attached, load the content
 
         }
 
@@ -257,9 +304,64 @@ public class WeatherActivity extends Activity {
         Intent intent = new Intent(this, StorageService.class);
         getApplicationContext().bindService(intent, mConnection,
                 Context.BIND_AUTO_CREATE);
-
+        loadContent();
     }
 
+    /***
+     * Load the page into the view based upon the preference setting
+     */
+    void loadContent()
+    {
+    	switch (mPref.getWxSrc()) {
+    		case WX_SRC_DEFAULT:
+    			loadDefaultWx();
+    			break;
+
+    		case WX_SRC_WEATHERMEISTER:
+    			loadWeathermeisterWx();
+    			break;
+    	}
+    }
+    
+    /***
+     * Load the internal legacy weather page
+     */
+    void loadDefaultWx() 
+    {
+    	if(false == mIsPageLoaded) {
+    		mWebView.loadData(ContentGenerator.makeContentImage(mContext, mService), "text/html", null);
+    		mIsPageLoaded = true;
+    	}
+    }
+    
+    /***
+     * Use weathermeister for the data based upon our location, destination and flight plan
+     */
+    void loadWeathermeisterWx()
+    {
+    	// Generate the web query to fetch the info from weathermeister
+        String webQuery = WeatherMeister.generate(mService);
+
+        // If we didn't get one, then nothing to do
+        if(null == webQuery) {
+        	return;
+        }
+        
+        // If the query we just built is not the same as the one we issued previously,
+        // then we need to refresh this page.
+        if(false == mWebQuery.equals(webQuery)) {
+        	mWebQuery = webQuery;
+        	mIsPageLoaded = false;
+        }
+
+        // After all that, do we need to load the page ?
+        if(mIsPageLoaded == false) {
+	      	mWebView.setWebViewClient(new WebViewClient());
+      		mWebView.loadUrl(mWebQuery);
+      		mIsPageLoaded = true;
+        }
+    }
+    
     /*
      * (non-Javadoc)
      * 

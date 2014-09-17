@@ -874,4 +874,21 @@ public class Preferences {
         mPref.edit().putString(mContext.getString(R.string.Geotag), tags).commit();
     }
 
+    /***
+     * Get the value representing where to get the weather information
+     * @return
+     */
+    public void setWxSrc(int wxSrc) {
+    	mPref.edit().putString(mContext.getString(R.string.prefWeatherSource), String.format("%d", wxSrc)).commit();
+    	return;
+    }
+
+    public int getWxSrc() {
+    	try {
+    		return(Integer.parseInt(mPref.getString(mContext.getString(R.string.prefWeatherSource), "0")));
+		} catch (Exception x) {
+			return 0;
+		}
+    }
+
 }
