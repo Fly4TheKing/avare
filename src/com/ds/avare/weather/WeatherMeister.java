@@ -17,12 +17,22 @@ import com.ds.avare.place.Airport;
 import com.ds.avare.place.Destination;
 import com.ds.avare.place.Plan;
 
+/***
+ * Essentially a static class that handles the strings to interact with the Weathermeister 
+ * web site.
+ * @author Ron
+ *
+ */
 public class WeatherMeister {
 	
-    static String weathermeisterUrl = "http://www.weathermeister.com/premium/";
-    static String routeBrief = "route_briefing.jsp?a=1&dt=30&tz=MINUTES_FROM_NOW&v=VFR&cw=50&c=default&";
-    static String areaBrief  = "area_briefing.jsp?&radius=50&c=default&";
-
+	// Some constant values
+    static String WEATHERMEISTER_URL = "http://www.weathermeister.com/premium/";
+    static String ROUTE_BRIEF        = "route_briefing.jsp?a=1&dt=30&tz=MINUTES_FROM_NOW&v=VFR&cw=50&c=default&dep=";
+    static String AREA_BRIEF         = "area_briefing.jsp?&radius=50&c=default&base=";
+    static String WAYPOINTS          = "&wpts=";
+    static String WAYPOINT_SEP       = "-";
+    static String DEST               = "&dest=";
+        
     /***
      * Generate the web query that we use to get the weather briefing
      * @param service
@@ -63,35 +73,35 @@ public class WeatherMeister {
       		// If there's only 1 point, then treat this as an area
       		// briefing.
       		if(1 == max) {
-          		webQuery = weathermeisterUrl + areaBrief + "base=" + adjustLeadingK(plan.getDestination(0).getID());
+          		webQuery = WEATHERMEISTER_URL + AREA_BRIEF + adjustLeadingK(plan.getDestination(0).getID());
       		} else  {
       			// Build up a flight plan route query
-	      		webQuery = weathermeisterUrl + routeBrief + "dep=" + adjustLeadingK(plan.getDestination(0).getID());
+	      		webQuery = WEATHERMEISTER_URL + ROUTE_BRIEF + adjustLeadingK(plan.getDestination(0).getID());
 	      		
 	      		// If more than 2 points, then there are intermediate waypoints
 	      		if (max > 2) {
-	      			webQuery += "&wpts=";
+	      			webQuery += WAYPOINTS;
 
 	      			// Add waypoints 
 		      		for(int idx = 1; idx < max - 1; idx++) {
 		      			webQuery += adjustLeadingK(plan.getDestination(idx).getID());
 		      			if(idx < (max - 2)) {
-		      				webQuery += "-";
+		      				webQuery += WAYPOINT_SEP;
 		      			}
 		      		}
 	      		}
 	      		
 	      		// Now set the destination of the plan into the query
-	  			webQuery += "&dest=" + adjustLeadingK(plan.getDestination(max - 1).getID());
+	  			webQuery += DEST + adjustLeadingK(plan.getDestination(max - 1).getID());
       		}
 
       	// Do we have a destination set ?
         } else if(null != dest) {
-      		webQuery = weathermeisterUrl + areaBrief + "base=" + adjustLeadingK(dest.getID());
+      		webQuery = WEATHERMEISTER_URL + AREA_BRIEF + adjustLeadingK(dest.getID());
 
      	// Otherwise, just get an area query based upon where we are
         } else {
-        	webQuery = weathermeisterUrl + areaBrief + "base=" + adjustLeadingK(airportID);
+        	webQuery = WEATHERMEISTER_URL + AREA_BRIEF + adjustLeadingK(airportID);
         }
         
         // All done, return what we have built.
@@ -102,10 +112,13 @@ public class WeatherMeister {
      * Return a string adjusted to handle prefixing the "K" to the airport
      * identifier
      * @param airportID
-     * @return
+     * @return the new 4 character identifier if applicable
      */
     static String adjustLeadingK(String airportID)
     {
+    	// If the ID is 3 chars in length and ALL ALPHABETIC, then prefix the
+    	// K to it and return
+    	// All other cases just return with what was passed to us.
     	if(airportID.length() == 3) {
     		for(int idx = 0; idx < 3; idx++) {
     			if(true == Character.isDigit(airportID.charAt(idx))) {
