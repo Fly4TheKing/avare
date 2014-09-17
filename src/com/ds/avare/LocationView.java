@@ -69,6 +69,7 @@ import android.view.MotionEvent;
 import android.view.View;
 import android.view.View.OnTouchListener;
 import android.view.ViewConfiguration;
+import android.widget.Button;
 
 /**
  * @author zkhan
@@ -1024,6 +1025,9 @@ public class LocationView extends View implements MultiTouchObjectCanvas<Object>
                 for (Obstacle o : mObstacles) {
                     rotateBitmapIntoPlace(mObstacleBitmap, 0, o.getLongitude(), o.getLatitude(), false);
                     canvas.drawBitmap(mObstacleBitmap.getBitmap(), mObstacleBitmap.getTransform(), mPaint);
+                    float x = (float)mOrigin.getOffsetX(o.getLongitude());
+                    float y = (float)mOrigin.getOffsetY(o.getLatitude()) + mObstacleBitmap.getBitmap().getHeight();
+                    mService.getShadowedText().draw(canvas, mMsgPaint, String.format("%d",  o.getHeight()), Color.BLACK, x, y);
                 }
             }
         }
@@ -1241,7 +1245,6 @@ public class LocationView extends View implements MultiTouchObjectCanvas<Object>
 	        	}
         	}
         }
-    	
     }
     
     /***
@@ -1288,6 +1291,36 @@ public class LocationView extends View implements MultiTouchObjectCanvas<Object>
           	mService.getInfoLines().drawCornerTextsDynamic(canvas, mPaint, 
           	        TEXT_COLOR, TEXT_COLOR_OPPOSITE, 4,
           	        getWidth(), mErrorStatus, getPriorityMessage());
+        }
+    }
+
+    // Draw the display size in NM
+    private void drawViewSize(Canvas canvas) {
+        if(null != mService) {
+        	
+        	int tX = 500;
+        	int tY = 500;
+
+            View parent = (View) getParent();
+            Button mMenuButton = (Button)parent.findViewById(R.id.location_button_menu);
+            Button mDrawButton = (Button)parent.findViewById(R.id.location_button_draw);
+            if(null != mMenuButton) {
+	            tY = mMenuButton.getHeight() + mMenuButton.getTop();
+	            tX = mMenuButton.getWidth() + mMenuButton.getLeft();
+            }
+        	
+	        float pixPerNm = mMovement.getNMPerLatitude(mScale);
+	        mMsgPaint.setColor(Color.WHITE);
+	        float vX = getWidth() / pixPerNm;
+	        float vY = getHeight() / pixPerNm;
+	        String vSize = String.format("%.1fnm x %.1fnm",  vX, vY);
+	        
+	        String ns = mGpsParams.getLatitude() > 0 ? "N" : "S";
+	        String ew = mGpsParams.getLongitude() > 0 ? "E" : "W";
+	        String vLocation = String.format(ew + "%.5f  " + ns + "%.5f", Math.abs(mGpsParams.getLongitude()), Math.abs(mGpsParams.getLatitude()));
+	        
+        	mService.getShadowedText().draw(canvas, mMsgPaint, vSize, Color.BLACK, tX+200, tY - 50);
+        	mService.getShadowedText().draw(canvas, mMsgPaint, vLocation, Color.BLACK, tX + 600, tY- 50);
         }
     }
     
@@ -1338,6 +1371,7 @@ public class LocationView extends View implements MultiTouchObjectCanvas<Object>
         drawVASI(canvas);
         drawStatusLines(canvas);
       	drawEdgeMarkers(canvas); // Must be after the infolines
+      	drawViewSize(canvas);
     }    
 
     /**

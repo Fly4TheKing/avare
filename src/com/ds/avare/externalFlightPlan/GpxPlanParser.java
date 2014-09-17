@@ -10,30 +10,46 @@ Redistribution and use in source and binary forms, with or without modification,
     *     THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-package com.ds.avare.userDefinedWaypoints;
+package com.ds.avare.externalFlightPlan;
 
 import java.io.FileInputStream;
+import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.PrintStream;
 import java.util.ArrayList;
 import java.util.List;
 
 import org.xmlpull.v1.XmlPullParser;
 import org.xmlpull.v1.XmlPullParserException;
 
+import com.ds.avare.StorageService;
+import com.ds.avare.userDefinedWaypoints.UDWMgr;
+import com.ds.avare.userDefinedWaypoints.Waypoint;
+
 import android.util.Xml;
 
 /***
- * Class to read user defined waypoints from a GPX formatted file
+ * Class to read a flight plan from a GPX formatted file
  * 
- * A GPX file is an XML formatted file from Garmin that defines Waypoints in a file according
+ * A GPX file is an XML formatted file from Garmin that defines the plan in a file according
  * to the following syntax:
  * 
  * <?xml version="1.0" encoding="UTF-8" ?>
 	<gpx version="1.1" creator="" xmlns="http://www.topografix.com/GPX/1/1" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.topografix.com/GPX/1/1 http://www.topografix.com/GPX/1/1/gpx.xsd">
-		<wpt lat="43.98431" lon="-88.56628">
-			<name>NameOfTheWayPoint</name>
-			<desc>Description of the waypoint</desc>
-		</wpt>
+		<rte>
+			<name>NameOfThePlan</name>
+			<desc>Description of the plan</desc>
+		
+			<rtept lat="43.98431" lon="-88.56628">
+				<name>Point 1</name>
+				<desc>Description of the waypoint</desc>
+			</rtept>
+
+			<rtept lat="43.98431" lon="-88.56628">
+				<name>Point 2</name>
+				<desc>Description of the waypoint</desc>
+			</rtept>
+		</rte>
 	</gpx>
  *
  * See http://www.topografix.com/GPX/1/1/gpx.xsd for a full spec of this schema
@@ -41,19 +57,29 @@ import android.util.Xml;
  * @author Ron
  *
  */
-public class GpxUDWParser extends UDWParser {
+public class GpxPlanParser  extends PlanParser {
     private static final String NS = null;
+    private static final String EXT = "gpx";
     private static final String GPX = "gpx";
-    private static final String WPT = "wpt";
+    private static final String RTE = "rte";
+    private static final String RTEPT = "rtept";
     private static final String LAT = "lat";
     private static final String LON = "lon";
     private static final String NAME = "name";
     private static final String DESC = "desc";
     private static final String CREATOR = "creator";
     private static final String VFRGPSPROCEDURES = "vfrgpsprocedures";
-
+    
+    private StorageService mService;
+    
+    @Override 
+    public String getExt() {
+    	return EXT;
+    }
+    
 	@Override
-	public List<Waypoint> parse(FileInputStream inputStream) {
+	public ExternalFlightPlan parse(StorageService service, FileInputStream inputStream) {
+		mService = service;
         try {
             XmlPullParser parser = Xml.newPullParser();
             parser.setFeature(XmlPullParser.FEATURE_PROCESS_NAMESPACES, false);
@@ -61,19 +87,35 @@ public class GpxUDWParser extends UDWParser {
             parser.nextTag();
             return readGPX(parser);
         } catch (Exception e) { }
-        	
         return null;
 	}
 
-    // The root tag should be "<gpx>", search for the opening "<wpt>" tag
+	@Override
+	public void generate(FileOutputStream outputStream, ExternalFlightPlan externalFlightPlan) {
+		PrintStream printStream = new PrintStream(outputStream);
+		printStream.println("<" + GPX + ">");
+		printStream.println("\t<" + RTE + ">");
+		printStream.println("\t\t<" + NAME + ">" + externalFlightPlan.getName() + "</" + NAME + ">");
+		printStream.println("\t\t<" + DESC + ">" + externalFlightPlan.getDesc() + "</" + DESC + ">");
+		for(Waypoint wp : externalFlightPlan.getWaypoints()) {
+			printStream.println("\t\t<" + RTEPT + ">");
+			printStream.println("\t\t\t<" + NAME + ">" + wp.getName() + "</" + NAME + ">");
+			printStream.println("\t\t\t<" + DESC + ">" + wp.getDesc() + "</" + DESC + ">");
+			printStream.println("\t\t</" + RTEPT + ">");
+		}
+		printStream.println("<\t/" + RTE + ">");
+		printStream.println("</" + GPX + ">");
+	}
+	
+    // The root tag should be "<gpx>", search for the opening "<rte>" tag
     //
-    private List<Waypoint> readGPX(XmlPullParser parser) throws XmlPullParserException, IOException {
-        List<Waypoint> entries = new ArrayList<Waypoint>();
-        String creator = null;
-        
+    private ExternalFlightPlan readGPX(XmlPullParser parser) throws XmlPullParserException, IOException {
+    	String creator = null;
+    	ExternalFlightPlan plan = null;
+    	
         parser.require(XmlPullParser.START_TAG, NS, GPX);	// We must be inside the <gpx> tag now
 
-        // Pull off attributes here that we are interested in
+        // Try and parse who created this plan
         for(int idx = 0; idx < parser.getAttributeCount(); idx++) {
         	String attrName = parser.getAttributeName(idx);
         	String attrValue = parser.getAttributeValue(idx);
@@ -81,34 +123,56 @@ public class GpxUDWParser extends UDWParser {
             	creator = attrValue;
         	}
         }
-
+        
+        // Now process all the sub-tags
         while (parser.next() != XmlPullParser.END_TAG) {
             if (parser.getEventType() != XmlPullParser.START_TAG) {
                 continue;
             }
             String name = parser.getName();
-            if (name.equals(WPT)) {
-            	Waypoint wpt = readWPT(parser); 
-                entries.add(wpt);
-                
-                if(null != creator) {
-	                if(creator.contains(VFRGPSPROCEDURES)) {
-	                	wpt.setMarkerType(Waypoint.MT_NONE);
-	                	wpt.setVisible(false);
-	                }
-                }
+            if (name.equals(RTE)) {
+                plan = readRTE(parser);
             } else {
                 skip(parser);
             }
-        }  
-        return entries;
+        }
+
+        plan.setCreator(creator);
+        return plan;
     }
 
-    // We are in the WPT tag, Get the LAT/LON attributes then search
-    // for NAME or DESC
-    //
-    private Waypoint readWPT(XmlPullParser parser) throws XmlPullParserException, IOException {
-        parser.require(XmlPullParser.START_TAG, NS, WPT);
+    // Found the RTE tag. Read the NAME and DESC from here along with all the RTEPT data
+    private ExternalFlightPlan readRTE(XmlPullParser parser) throws XmlPullParserException, IOException {
+        parser.require(XmlPullParser.START_TAG, NS, RTE);
+
+        String name = null;
+    	String desc = null;;
+    	List<Waypoint> p = new ArrayList<Waypoint>();
+
+        while (parser.next() != XmlPullParser.END_TAG) {
+            if (parser.getEventType() != XmlPullParser.START_TAG) {
+                continue;
+            }
+            String nodeName = parser.getName();
+            if (nodeName.equals(NAME)) {
+                name = readNAME(parser);
+            } else if (nodeName.equals(DESC)) {
+                desc = readDESC(parser);
+            } else if (nodeName.equals(RTEPT)) {
+                p.add(readRTEPT(parser));
+            } else {
+                skip(parser);
+            }
+        }
+        
+        // We have all the data for the plan. Create one and return
+        return new ExternalFlightPlan(name, desc, GPX, p);
+    }
+        
+    // We are in the RTEPT tag, Get the LAT/LON attributes then search
+    // for NAME or DESC - return that info as a Waypoint
+    private Waypoint readRTEPT(XmlPullParser parser) throws XmlPullParserException, IOException {
+        parser.require(XmlPullParser.START_TAG, NS, RTEPT);
 
         String name = null;
         String description = null;
@@ -116,7 +180,7 @@ public class GpxUDWParser extends UDWParser {
         float lon = 0;
         float alt = 0;
         boolean showDist = false;	// Future is to pull this from metadata in the point itself
-        int markerType = Waypoint.MT_CYANDOT;	// Type of marker to use on the chart (metadata again)
+        int markerType = Waypoint.MT_CROSSHAIRS;	// Type of marker to use on the chart (metadata again)
 
         // LAT and LON are attributes of this container
         for(int idx = 0; idx < parser.getAttributeCount(); idx++) {
@@ -144,9 +208,21 @@ public class GpxUDWParser extends UDWParser {
             }
         }
         
-        // We've got all the data we're going to get from this entry
-        return new Waypoint(name, description, 
+        // We have all the data for a new waypoint. Search the list of EXISTING
+        // waypoints for a match. If we find one, then return THAT value and don't 
+        // create a new one.
+        UDWMgr udwMgr = mService.getUDWMgr();
+        Waypoint wp = udwMgr.getWaypoint(name, lon, lat); 
+        if(null != wp) {
+        	return wp;
+        }
+
+        // Create a new waypoint from this data, add it to the global collection
+        // and return it to the caller
+        wp = new Waypoint(name, description, 
         		lon, lat, alt, showDist, markerType);
+        udwMgr.add(wp);
+        return wp;
     }
 
     // Extract NAME
