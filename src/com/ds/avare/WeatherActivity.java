@@ -359,6 +359,10 @@ public class WeatherActivity extends Activity {
 	      	mWebView.setWebViewClient(new WebViewClient());
       		mWebView.loadUrl(mWebQuery);
       		mIsPageLoaded = true;
+
+//            Intent intent = new Intent(WeatherActivity.this, WebActivity.class);
+//            intent.putExtra("url", mWebQuery);
+//            startActivity(intent);
         }
     }
     
