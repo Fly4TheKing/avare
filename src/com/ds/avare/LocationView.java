@@ -42,6 +42,7 @@ import com.ds.avare.utils.BitmapHolder;
 import com.ds.avare.utils.DisplayIcon;
 import com.ds.avare.utils.Helper;
 import com.ds.avare.utils.InfoLines.InfoLineFieldLoc;
+import com.ds.avare.utils.ShadowedText;
 import com.ds.avare.utils.WeatherHelper;
 import com.ds.avare.weather.AirSigMet;
 import com.ds.avare.weather.Airep;
@@ -69,6 +70,7 @@ import android.view.MotionEvent;
 import android.view.View;
 import android.view.View.OnTouchListener;
 import android.view.ViewConfiguration;
+import android.widget.Button;
 
 /**
  * @author zkhan
@@ -1291,6 +1293,33 @@ public class LocationView extends View implements MultiTouchObjectCanvas<Object>
         }
     }
     
+    // Draw the display size in NM
+    private void drawViewSize(Canvas canvas) {
+        if(null != mService) {
+        	
+	        mMsgPaint.setColor(Color.WHITE);
+            View parent = (View) getParent();
+            if(null != parent) {
+	            Button mMenuButton = (Button)parent.findViewById(R.id.location_button_menu);
+		        if(null != mMenuButton && null != mMovement) {
+			        float pixPerNm = mMovement.getNMPerLatitude(mScale);
+			        float vX = getWidth() / pixPerNm;
+			        float vY = getHeight() / pixPerNm;
+			        String vSize = String.format("%.1fnm x %.1fnm",  vX, vY);
+		        	mService.getShadowedText().draw(canvas, mMsgPaint, vSize, Color.BLACK, ShadowedText.RIGHT, mMenuButton.getRight(), mMenuButton.getHeight() / 2 + mMenuButton.getTop());
+		        }
+
+	            Button mDrawButton = (Button)parent.findViewById(R.id.location_button_draw);
+		        if(null != mDrawButton && null != mGpsParams) {
+			        String ns = mGpsParams.getLatitude() > 0 ? "N" : "S";
+			        String ew = mGpsParams.getLongitude() > 0 ? "E" : "W";
+			        String vLocation = String.format(ew + "%.5f  " + ns + "%.5f", Math.abs(mGpsParams.getLongitude()), Math.abs(mGpsParams.getLatitude()));
+		        	mService.getShadowedText().draw(canvas, mMsgPaint, vLocation, Color.BLACK, ShadowedText.LEFT, mDrawButton.getLeft(), mDrawButton.getHeight() / 2 + mDrawButton.getTop());
+		        }
+            }
+        }
+    }
+
     /**
      * @param canvas
      * Does pretty much all drawing on screen
@@ -1338,6 +1367,7 @@ public class LocationView extends View implements MultiTouchObjectCanvas<Object>
         drawVASI(canvas);
         drawStatusLines(canvas);
       	drawEdgeMarkers(canvas); // Must be after the infolines
+      	drawViewSize(canvas);
     }    
 
     /**
