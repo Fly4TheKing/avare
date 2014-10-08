@@ -1294,36 +1294,6 @@ public class LocationView extends View implements MultiTouchObjectCanvas<Object>
         }
     }
 
-    // Draw the display size in NM
-    private void drawViewSize(Canvas canvas) {
-        if(null != mService) {
-        	
-        	int tX = 500;
-        	int tY = 500;
-
-            View parent = (View) getParent();
-            Button mMenuButton = (Button)parent.findViewById(R.id.location_button_menu);
-            Button mDrawButton = (Button)parent.findViewById(R.id.location_button_draw);
-            if(null != mMenuButton) {
-	            tY = mMenuButton.getHeight() + mMenuButton.getTop();
-	            tX = mMenuButton.getWidth() + mMenuButton.getLeft();
-            }
-        	
-	        float pixPerNm = mMovement.getNMPerLatitude(mScale);
-	        mMsgPaint.setColor(Color.WHITE);
-	        float vX = getWidth() / pixPerNm;
-	        float vY = getHeight() / pixPerNm;
-	        String vSize = String.format("%.1fnm x %.1fnm",  vX, vY);
-	        
-	        String ns = mGpsParams.getLatitude() > 0 ? "N" : "S";
-	        String ew = mGpsParams.getLongitude() > 0 ? "E" : "W";
-	        String vLocation = String.format(ew + "%.5f  " + ns + "%.5f", Math.abs(mGpsParams.getLongitude()), Math.abs(mGpsParams.getLatitude()));
-	        
-        	mService.getShadowedText().draw(canvas, mMsgPaint, vSize, Color.BLACK, tX+200, tY - 50);
-        	mService.getShadowedText().draw(canvas, mMsgPaint, vLocation, Color.BLACK, tX + 600, tY- 50);
-        }
-    }
-    
     /**
      * @param canvas
      * Does pretty much all drawing on screen
@@ -1371,7 +1341,6 @@ public class LocationView extends View implements MultiTouchObjectCanvas<Object>
         drawVASI(canvas);
         drawStatusLines(canvas);
       	drawEdgeMarkers(canvas); // Must be after the infolines
-      	drawViewSize(canvas);
     }    
 
     /**
